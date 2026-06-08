@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client-js"
+
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  VENDOR
+  ADMIN
+}
+
+enum VendorVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SeatType {
+  FREE
+  PAID
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum AttendanceStatus {
+  PENDING
+  CHECKED_IN
+  NO_SHOW
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum WalletTransactionType {
+  BOOKING_CREDIT
+  COMMISSION_DEDUCTED
+  WITHDRAWAL
+  REFUND
+  ADJUSTMENT
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED
+}
+
+enum SlotStatus {
+  ACTIVE
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique
+
+  email     String   @unique
+
+  firstName String?
+  lastName  String?
+
+  imageUrl  String?
+
+  phone     String?
+
+  role      Role     @default(USER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings      Booking[]
+  notifications Notification[]
+
+  vendorProfile VendorProfile?
+
+  @@index([clerkId])
+}
+
+model VendorProfile {
+  id String @id @default(uuid())
+
+  userId String @unique
+
+  user User @relation(fields: [userId], references: [id])
+
+  businessName String
+
+  gstNumber String?
+  panNumber String?
+
+  documentUrl String?
+
+  rejectionReason String?
+
+  verificationStatus VendorVerificationStatus @default(PENDING)
+
+  deletedAt DateTime?
+
+  libraries Library[]
+
+  wallet VendorWallet?
+
+  commission VendorCommission?
+
+  withdrawals WithdrawalRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([verificationStatus])
+}
+
+model VendorCommission {
+  id String @id @default(uuid())
+
+  vendorId String @unique
+
+  vendor VendorProfile @relation(fields: [vendorId], references: [id])
+
+  type CommissionType
+
+  value Decimal @db.Decimal(10,2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Library {
+  id String @id @default(uuid())
+
+  vendorId String
+
+  vendor VendorProfile @relation(fields: [vendorId], references: [id])
+
+  name String
+
+  description String?
+
+  address String
+
+  city String?
+  state String?
+  pincode String?
+
+  latitude Float?
+  longitude Float?
+
+  openingMinutes Int?
+  closingMinutes Int?
+
+  isActive Boolean @default(true)
+
+  deletedAt DateTime?
+
+  images LibraryImage[]
+
+  slots LibrarySlot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([deletedAt])
+}
+
+model LibraryImage {
+  id String @id @default(uuid())
+
+  libraryId String
+
+  library Library @relation(fields: [libraryId], references: [id])
+
+  imageUrl String
+
+  createdAt DateTime @default(now())
+}
+
+model LibrarySlot {
+  id String @id @default(uuid())
+
+  libraryId String
+
+  library Library @relation(fields: [libraryId], references: [id])
+
+  date DateTime
+
+  startTime DateTime
+  endTime DateTime
+
+  freeCapacity Int @default(0)
+  paidCapacity Int @default(0)
+
+  freeAvailable Int @default(0)
+  paidAvailable Int @default(0)
+
+  paidSeatPrice Decimal @default(0) @db.Decimal(10,2)
+
+  status SlotStatus @default(ACTIVE)
+
+  bookings Booking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([libraryId])
+  @@index([date])
+  @@index([status])
+}
+
+model Booking {
+  id String @id @default(uuid())
+
+  bookingCode String @unique
+
+  userId String
+  slotId String
+
+  user User @relation(fields: [userId], references: [id])
+
+  slot LibrarySlot @relation(fields: [slotId], references: [id])
+
+  seatType SeatType
+
+  amount Decimal @default(0) @db.Decimal(10,2)
+
+  bookingStatus BookingStatus @default(PENDING)
+
+  paymentStatus PaymentStatus @default(PENDING)
+
+  attendanceStatus AttendanceStatus @default(PENDING)
+
+  qrToken String? @unique
+
+  qrGeneratedAt DateTime?
+
+  checkedInAt DateTime?
+
+  payment Payment?
+
+  walletTransactions WalletTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([slotId])
+  @@index([bookingCode])
+  @@index([qrToken])
+  @@index([attendanceStatus])
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  bookingId String @unique
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  cashfreeOrderId String? @unique
+
+  cashfreePaymentId String?
+
+  transactionId String?
+
+  amount Decimal @db.Decimal(10,2)
+
+  status PaymentStatus
+
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([cashfreeOrderId])
+}
+
+model VendorWallet {
+  id String @id @default(uuid())
+
+  vendorId String @unique
+
+  vendor VendorProfile @relation(fields: [vendorId], references: [id])
+
+  availableBalance Decimal @default(0) @db.Decimal(12,2)
+
+  pendingBalance Decimal @default(0) @db.Decimal(12,2)
+
+  transactions WalletTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WalletTransaction {
+  id String @id @default(uuid())
+
+  walletId String
+
+  wallet VendorWallet @relation(fields: [walletId], references: [id])
+
+  bookingId String?
+
+  booking Booking? @relation(fields: [bookingId], references: [id])
+
+  type WalletTransactionType
+
+  amount Decimal @db.Decimal(12,2)
+
+  description String?
+
+  createdAt DateTime @default(now())
+
+  @@index([walletId])
+}
+
+model WithdrawalRequest {
+  id String @id @default(uuid())
+
+  vendorId String
+
+  vendor VendorProfile @relation(fields: [vendorId], references: [id])
+
+  amount Decimal @db.Decimal(12,2)
+
+  accountHolderName String
+
+  bankAccountNumber String
+
+  ifscCode String
+
+  status WithdrawalStatus @default(PENDING)
+
+  remarks String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([status])
+}
+
+model AdminWallet {
+  id String @id @default(uuid())
+
+  availableBalance Decimal @default(0) @db.Decimal(12,2)
+
+  transactions AdminWalletTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminWalletTransaction {
+  id String @id @default(uuid())
+
+  adminWalletId String
+
+  adminWallet AdminWallet @relation(fields: [adminWalletId], references: [id])
+
+  bookingId String?
+
+  amount Decimal @db.Decimal(12,2)
+
+  description String?
+
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id])
+
+  title String
+
+  message String
+
+  isRead Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
